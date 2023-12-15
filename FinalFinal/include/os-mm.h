@@ -67,8 +67,6 @@ struct mm_struct {
 
    /* list of free page */
    struct pgn_t *lru_pgn;
-
-   int cur;
 };
 
 /*

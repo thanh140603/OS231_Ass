@@ -220,6 +220,25 @@ int pgfree_data(struct pcb_t *proc, uint32_t reg_index)
   return ret;
 }
 
+
+int set_page_hit_cur_to_zero(struct mm_struct *mm, int pgn) {
+    struct pgn_t *current_node = global_lru; // Assume global_lru is the head of your linked list
+
+    while (current_node != NULL) {
+        if (current_node->pgn == pgn && current_node->owner == mm) {
+            // Found the page node, set cur to zero
+            current_node->cur = 0;
+            printf("Page hit: Page number %d's 'cur' value set to 0\n", pgn);
+            return 0; // Success
+        }
+        current_node = current_node->pg_next; // Move to the next node in the list
+    }
+
+    printf("Page number %d not found in the list\n", pgn);
+    return -1; // Indicate failure: page not found
+}
+
+
 /*pg_getpage - get the page in ram
  *@mm: memory region
  *@pagenum: PGN
@@ -233,6 +252,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   printf("Tim page de read/write\n");
   if (!PAGING_PAGE_PRESENT(pte)) //free roi thi tinh sao? free->bit present/ swap-> bit swap
   {
+
     printf("Page khong ton tai\n");
     fpn = NULL;
     return -1; // non exist in RAM or SWP, bị freed 
@@ -241,6 +261,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     if(!PAGING_PAGE_IN_SWAP(pte)) { //không trong swp -> khỏe rồi, trong RAM
       *fpn = PAGING_FPN(pte);
       printf("Page trong RAM\n");
+      set_page_hit_cur_to_zero(mm, pgn);
       return 0;
     }
     // phải extract bit chứ làm như sau sai đó -> if(PAGING_PAGE_IN_SWAP(pte)) /* Page is not online, it's in SWAP, make it actively living */
@@ -350,6 +371,11 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
         //Vô Ram rồi, nên là phải vào fifo, thằng pgn ở trong Virtual
         //enlist_pgn_node(&caller->mm->fifo_pgn,pgn); lấy pgn là đúng rồi do trong virtual mà
+        struct pgn_t* tmp = global_lru;
+        while(tmp!=NULL){
+          tmp->cur=tmp->cur+1;
+          tmp=tmp->pg_next;
+        }
         enlist_pgn_node(&global_lru, pgn, caller->mm); //Dùng global
         //chỉ mới enlist thôi, có biết cái mới thuộc proc nào không?
         caller->mm->lru_pgn = global_lru;
@@ -681,15 +707,17 @@ int find_victim_page(struct mm_struct *mm, int *retpgn, uint32_t** ret_ptbl)
 
     struct pgn_t *t = global_lru;
     while (t->pg_next!=pg){
-      if (pg->pg_next==NULL){
-        t->pg_next=NULL;
-      }
-      else{
-        t->pg_next=tmp;
-      }
       t=t->pg_next;
     }
-    *retpgn = pg->pgn; //last node
+    if (pg->pg_next == NULL)
+    {
+      t->pg_next=NULL;
+    }
+    else
+    {
+      t->pg_next=tmp;
+    }
+    *retpgn = pg->pgn; 
   }
 
   //tìm ra cái victim page chứ không biết nó thuộc proc nào

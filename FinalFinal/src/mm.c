@@ -139,11 +139,13 @@ int vmap_page_range(struct pcb_t *caller, // process call
 
    /* Tracking for later page replacement activities (if needed)
     * Enqueue new usage page */
-   struct pgn_t* tmp = global_lru;
-   while(tmp!=NULL){
+
+    struct pgn_t* tmp = global_lru;
+    while(tmp!=NULL)
+    {
       tmp->cur=tmp->cur+1;
       tmp=tmp->pg_next;
-   }
+    }
    
     enlist_pgn_node(&global_lru, pgn+pgit, caller->mm); //Dùng global
     //enlist_pgn_node(&caller->mm->fifo_pgn, pgn+pgit); // cho thì dùng, FIFO
